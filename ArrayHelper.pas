@@ -4,7 +4,7 @@
 { extends class TArray                                  }
 {                                                       }
 { Copyright(c) 2017 by Willi Commer (wcs)               }
-{ Licence GNU                                      }
+{ Licence GNU                                           }
 {                                                       }
 { For examples see procedure Test_All_Helper_Functions  }
 {                                                       }
@@ -14,7 +14,7 @@
 unit ArrayHelper;
 
 
-{$DEFINE TEST_FUNCTION}  // change to deactive test function
+{  $DEFINE TEST_FUNCTION}  // change to deactive test function
 
 
 interface
