@@ -1,20 +1,42 @@
-{*******************************************************}
-{                                                       }
-{ ArrayHelper  version 1.0                              }
-{ extends class TArray                                  }
-{                                                       }
-{ Copyright(c) 2017 by Willi Commer (wcs)               }
-{ Licence GNU                                           }
-{                                                       }
-{ For examples see procedure Test_All_Helper_Functions  }
-{                                                       }
-{*******************************************************}
-
-
 unit ArrayHelper;
 
 
-{  $DEFINE TEST_FUNCTION}  // change to deactive test function
+///////////////////////////////////////////////////////////////////////////////
+//
+//  ArrayHelper  version 1.2
+//  extends class TArray and add TArrayRecord<T> to make dynamic arrays
+//  as simple, as TList
+//
+//  Copyright(c) 2017 by Willi Commer (wcs)
+//  Licence GNU
+//
+//  Dynamic arrays are smart because its memore usage is handled by the memory
+//  manager. But the funtion libraries are lean and differs from object based.
+//  Based on TArray class, that gives Sort and Binary search, this unit will
+//  extend TArray with functions available for TList or TStrings.
+//  The next level is TArrayRecord<T> record type. It wraps a record around
+//  the dynamic array. This give us the ability to use dynamic arrays like
+//  objects with out the pain to organize the final Free call.
+//
+//  var
+//    A: TArrayRecord<string>;
+//  begin
+//    A.SetValues(['a','b','c']);
+//    A.Add('d');
+//    assert(  A.Count = 4 );    // same as length(A.Items);
+//    assert(  A[1] = 'b' );
+//    assert(  A.IndexOf('a') = 0 );
+//    ..
+//
+//  For more examples see procedure Test_All_Helper_Functions
+//  For updates check https://github.com/WilliCommer/ArrayHelper
+//
+//
+///////////////////////////////////////////////////////////////////////////////
+
+
+
+{$DEFINE TEST_FUNCTION}  // change to deactive test function
 
 
 interface
@@ -23,22 +45,30 @@ uses
 
 type
 
+  // callback function for function ForEach
+  TArrayForEachCallback<T> = reference to procedure(var Value: T; Index: integer);
+
   // callback function for function Map
   TArrayMapCallback<T> = reference to function(var Value: T; Index: integer): boolean;
+
+  // callback function for function MapTo
+  TArrayConvert<T,TTo> = reference to function(const Value: T): TTo;
 
   // callback function for function Find
   TArrayFindCallback<T> = reference to function(const Value: T): boolean;
 
+
+
   // extends class TArray
   TArrayHelper = class helper for TArray
     // add item to array
-    class function Add<T>(var Values: TArray<T>; Item: T): integer;
+    class function Add<T>(var Values: TArray<T>; Item: T): integer; static;
 
     // delete item at index
-    class procedure Delete<T>(var Values: TArray<T>; Index: integer);
+    class procedure Delete<T>(var Values: TArray<T>; Index: integer); static;
 
     // insert item at index
-    class procedure Insert<T>(var Values: TArray<T>; Index: integer; Value: T);
+    class procedure Insert<T>(var Values: TArray<T>; Index: integer; Value: T); static;
 
     // append array
     class procedure AddRange<T>(var Values: TArray<T>; const ValuesToInsert: array of T); static;
@@ -52,6 +82,18 @@ type
     // get index of equal item (using IComparer)
     class function IndexOf<T>(var Values: TArray<T>; Item: T; const Comparer: IComparer<T>): integer; overload; static;
 
+    // get index of maximal item
+    class function IndexOfMax<T>(var Values: TArray<T>): integer; overload; static;
+
+    // get index of maximal item (using IComparer)
+    class function IndexOfMax<T>(var Values: TArray<T>; const Comparer: IComparer<T>): integer; overload; static;
+
+    // get index of minimal item
+    class function IndexOfMin<T>(var Values: TArray<T>): integer; overload; static;
+
+    // get index of minimal item (using IComparer)
+    class function IndexOfMin<T>(var Values: TArray<T>; const Comparer: IComparer<T>): integer; overload; static;
+
     // is a equal item is member of values
     class function Contains<T>(var Values: TArray<T>; Item: T): boolean; overload; static;
 
@@ -59,10 +101,13 @@ type
     class function Contains<T>(var Values: TArray<T>; Item: T; const Comparer: IComparer<T>): boolean; overload; static;
 
     // compare two arrays
-    class function Compare<T>(const Values, ValuesToCompare: TArray<T>): boolean; overload; static;
+    class function Compare<T>(const Values, ValuesToCompare: array of T): boolean; overload; static;
 
     // compare two arrays (using IComparer)
-    class function Compare<T>(const Values, ValuesToCompare: TArray<T>; const Comparer: IComparer<T>): boolean; overload; static;
+    class function Compare<T>(const Values, ValuesToCompare: array of T; const Comparer: IComparer<T>): boolean; overload; static;
+
+    // ForEach
+    class procedure ForEach<T>(var Values: TArray<T>; const Callback: TArrayForEachCallback<T>); static;
 
     // find with callback
     class function Find<T>(const Values: TArray<T>; const Callback: TArrayFindCallback<T>; const StartIndex: integer = 0): integer; overload; static;
@@ -77,6 +122,70 @@ type
 {$ENDIF TEST_FUNCTION}
 
   end;
+
+
+type
+  TArrayRecord<T> = record
+  private
+    function GetCount: integer;
+    procedure SetCount(const Value: integer);
+    function GetItemAt(Index: integer): T;
+    procedure SetItemAt(Index: integer; Value: T);
+  public
+    Items: TArray<T>;
+    property Count: integer read GetCount write SetCount;
+    property ItemAt[Index: Integer]: T read GetItemAt write SetItemAt; default;
+
+    constructor Create(ACapacity: integer); overload;
+    constructor Create(const AValues: array of T); overload;
+    procedure Clear;
+    procedure SetItems(const Values: array of T);
+    function Add(const Value: T): integer;
+    procedure Delete(Index: integer);
+    procedure Insert(Index: integer; Value: T);
+    function Remove(const AItem: T): boolean;
+    function AddIfNotContians(const AItem: T): boolean;
+
+    procedure AddRange(const ValuesToInsert: array of T); overload;
+    procedure AddRange(const ValuesToInsert: TArrayRecord<T>); overload;
+
+    procedure InsertRange(Index: Integer; const ValuesToInsert: array of T); overload;
+    procedure InsertRange(Index: Integer; const ValuesToInsert: TArrayRecord<T>); overload;
+
+    function IndexOf(Item: T): integer; overload;
+    function IndexOf(Item: T; const Comparer: IComparer<T>): integer; overload;
+
+    function IndexOfMax: integer; overload;
+    function IndexOfMax(const Comparer: IComparer<T>): integer; overload;
+    function IndexOfMin: integer; overload;
+    function IndexOfMin(const Comparer: IComparer<T>): integer; overload;
+
+    function Contains(Item: T): boolean; overload;
+    function Contains(Item: T; const Comparer: IComparer<T>): boolean; overload;
+
+    function Compare(const ValuesToCompare: array of T): boolean; overload;
+    function Compare(const ValuesToCompare: array of T; const Comparer: IComparer<T>): boolean; overload;
+    function Compare(const ValuesToCompare: TArrayRecord<T>): boolean; overload;
+    function Compare(const ValuesToCompare: TArrayRecord<T>; const Comparer: IComparer<T>): boolean; overload;
+
+    procedure ForEach(const Callback: TArrayForEachCallback<T>);
+    function Find(const Callback: TArrayFindCallback<T>; const StartIndex: integer = 0): integer; overload;
+    function Map(const Callback: TArrayMapCallback<T>): TArrayRecord<T>;
+    function Convert<TTo>(const Callback: TArrayConvert<T,TTo>): TArrayRecord<TTo>;
+
+    procedure Sort; overload;
+    procedure Sort(const AComparer: IComparer<T>); overload;
+    procedure Sort(const AComparer: IComparer<T>; AIndex, ACount: Integer); overload;
+    function BinarySearch(const AItem: T; out AFoundIndex: Integer; const AComparer: IComparer<T>;
+      AIndex, ACount: Integer): Boolean; overload;
+    function BinarySearch(const AItem: T; out AFoundIndex: Integer; const AComparer: IComparer<T>): Boolean; overload;
+    function BinarySearch(const AItem: T; out AFoundIndex: Integer): Boolean; overload;
+
+    // operator overloads
+    class operator Equal(const L, R: TArrayRecord<T>): boolean;
+    class operator NotEqual(const L, R: TArrayRecord<T>): boolean;
+  end;
+
 
 
 implementation
@@ -153,11 +262,47 @@ begin
   Result := -1;
 end;
 
-
 class function TArrayHelper.IndexOf<T>(var Values: TArray<T>; Item: T): integer;
 begin
   Result := IndexOf<T>(Values, Item, TComparer<T>.Default);
 end;
+
+
+class function TArrayHelper.IndexOfMax<T>(var Values: TArray<T>): integer;
+begin
+  Result := IndexOfMax<T>(Values, TComparer<T>.Default);
+end;
+
+class function TArrayHelper.IndexOfMax<T>(var Values: TArray<T>; const Comparer: IComparer<T>): integer;
+var
+  I: Integer;
+begin
+  if length(Values) = 0 then
+    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+  Result := 0;
+  for I := 1 to High(Values) do
+    if Comparer.Compare(Values[I], Values[Result]) > 0 then
+      Result := I;
+end;
+
+class function TArrayHelper.IndexOfMin<T>(var Values: TArray<T>): integer;
+begin
+  Result := IndexOfMin<T>(Values, TComparer<T>.Default);
+end;
+
+class function TArrayHelper.IndexOfMin<T>(var Values: TArray<T>; const Comparer: IComparer<T>): integer;
+var
+  I: Integer;
+begin
+  if length(Values) = 0 then
+    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+  Result := 0;
+  for I := 1 to High(Values) do
+    if Comparer.Compare(Values[I], Values[Result]) < 0 then
+      Result := I;
+end;
+
+
 
 
 
@@ -175,7 +320,7 @@ end;
 
 
 
-class function TArrayHelper.Compare<T>(const Values, ValuesToCompare: TArray<T>; const Comparer: IComparer<T>): boolean;
+class function TArrayHelper.Compare<T>(const Values, ValuesToCompare: array of T; const Comparer: IComparer<T>): boolean;
 var
   I: Integer;
 begin
@@ -186,9 +331,19 @@ begin
 end;
 
 
-class function TArrayHelper.Compare<T>(const Values, ValuesToCompare: TArray<T>): boolean;
+class function TArrayHelper.Compare<T>(const Values, ValuesToCompare: array of T): boolean;
 begin
   Result := Compare<T>(Values, ValuesToCompare, TComparer<T>.Default);
+end;
+
+
+
+class procedure TArrayHelper.ForEach<T>(var Values: TArray<T>; const Callback: TArrayForEachCallback<T>);
+var
+  I: Integer;
+begin
+  for I := Low(Values) to High(Values) do
+    Callback(Values[I], I);
 end;
 
 
@@ -222,7 +377,359 @@ end;
 
 
 
+
+
+
+{ TArrayRecord<T> }
+
+
+constructor TArrayRecord<T>.Create(ACapacity: integer);
+begin
+  SetLength(Items, ACapacity);
+end;
+
+constructor TArrayRecord<T>.Create(const AValues: array of T);
+begin
+  SetLength(Items, 0);
+  AddRange(AValues);
+end;
+
+procedure TArrayRecord<T>.Clear;
+begin
+  SetLength(Items, 0);
+end;
+
+
+
+class operator TArrayRecord<T>.Equal(const L, R: TArrayRecord<T>): boolean;
+begin
+  Result := L.Compare(R);
+end;
+
+class operator TArrayRecord<T>.NotEqual(const L, R: TArrayRecord<T>): boolean;
+begin
+  Result := not L.Compare(R);
+end;
+
+
+
+function TArrayRecord<T>.GetCount: integer;
+begin
+  Result := length(Items);
+end;
+
+procedure TArrayRecord<T>.SetCount(const Value: integer);
+begin
+  SetLength(Items, Value);
+end;
+
+procedure TArrayRecord<T>.SetItemAt(Index: integer; Value: T);
+begin
+  Items[Index] := Value;
+end;
+
+procedure TArrayRecord<T>.SetItems(const Values: array of T);
+begin
+  SetLength(Items, 0);
+  AddRange(Values);
+end;
+
+function TArrayRecord<T>.GetItemAt(Index: integer): T;
+begin
+  Result := Items[Index];
+end;
+
+
+procedure TArrayRecord<T>.AddRange(const ValuesToInsert: array of T);
+begin
+  TArray.AddRange<T>(Items, ValuesToInsert);
+end;
+
+procedure TArrayRecord<T>.AddRange(const ValuesToInsert: TArrayRecord<T>);
+begin
+  TArray.AddRange<T>(Items, ValuesToInsert.Items);
+end;
+
+
+
+function TArrayRecord<T>.BinarySearch(const AItem: T; out AFoundIndex: Integer; const AComparer: IComparer<T>; AIndex,
+  ACount: Integer): Boolean;
+begin
+  Result := TArray.BinarySearch<T>(Items, AItem, AFoundIndex, AComparer, AIndex, ACount);
+end;
+
+function TArrayRecord<T>.BinarySearch(const AItem: T; out AFoundIndex: Integer; const AComparer: IComparer<T>): Boolean;
+begin
+  Result := TArray.BinarySearch<T>(Items, AItem, AFoundIndex, AComparer);
+end;
+
+function TArrayRecord<T>.BinarySearch(const AItem: T; out AFoundIndex: Integer): Boolean;
+begin
+  Result := TArray.BinarySearch<T>(Items, AItem, AFoundIndex);
+end;
+
+
+procedure TArrayRecord<T>.Delete(Index: integer);
+begin
+  TArray.Delete<T>(Items, Index);
+end;
+
+
+function TArrayRecord<T>.Remove(const AItem: T): boolean;
+var
+  I: integer;
+begin
+  I := IndexOf(AItem);
+  if I < 0 then
+    Result := FALSE
+  else
+  begin
+    Delete(I);
+    Result := TRUE;
+  end;
+end;
+
+
+function TArrayRecord<T>.AddIfNotContians(const AItem: T): boolean;
+begin
+  Result := not Contains(AItem);
+  if not Result then
+    Add(AItem);
+end;
+
+
+
+function TArrayRecord<T>.Find(const Callback: TArrayFindCallback<T>; const StartIndex: integer): integer;
+begin
+  Result := TArray.Find<T>(Items, Callback, StartIndex);
+end;
+
+procedure TArrayRecord<T>.ForEach(const Callback: TArrayForEachCallback<T>);
+begin
+  TArray.ForEach<T>(Items, Callback);
+end;
+
+
+
+function TArrayRecord<T>.Compare(const ValuesToCompare: TArrayRecord<T>): boolean;
+begin
+  Result := TArray.Compare<T>(Items, ValuesToCompare.Items);
+end;
+
+function TArrayRecord<T>.Compare(const ValuesToCompare: TArrayRecord<T>; const Comparer: IComparer<T>): boolean;
+begin
+  Result := TArray.Compare<T>(Items, ValuesToCompare.Items, Comparer);
+end;
+
+function TArrayRecord<T>.Compare(const ValuesToCompare: array of T): boolean;
+begin
+  Result := TArray.Compare<T>(Items, ValuesToCompare);
+end;
+
+function TArrayRecord<T>.Compare(const ValuesToCompare: array of T; const Comparer: IComparer<T>): boolean;
+begin
+  Result := TArray.Compare<T>(Items, ValuesToCompare, Comparer);
+end;
+
+
+
+
+function TArrayRecord<T>.Contains(Item: T; const Comparer: IComparer<T>): boolean;
+begin
+  Result := TArray.Contains<T>(Items, Item, Comparer);
+end;
+
+
+function TArrayRecord<T>.Contains(Item: T): boolean;
+begin
+  Result := TArray.Contains<T>(Items, Item);
+end;
+
+
+
+
+function TArrayRecord<T>.IndexOf(Item: T; const Comparer: IComparer<T>): integer;
+begin
+  Result := TArray.IndexOf<T>(Items, Item, Comparer);
+end;
+
+
+function TArrayRecord<T>.IndexOfMax: integer;
+begin
+  Result := TArray.IndexOfMax<T>(Items);
+end;
+
+function TArrayRecord<T>.IndexOfMax(const Comparer: IComparer<T>): integer;
+begin
+  Result := TArray.IndexOfMax<T>(Items, Comparer);
+end;
+
+function TArrayRecord<T>.IndexOfMin: integer;
+begin
+  Result := TArray.IndexOfMin<T>(Items);
+end;
+
+function TArrayRecord<T>.IndexOfMin(const Comparer: IComparer<T>): integer;
+begin
+  Result := TArray.IndexOfMin<T>(Items, Comparer);
+end;
+
+function TArrayRecord<T>.IndexOf(Item: T): integer;
+begin
+  Result := TArray.IndexOf<T>(Items, Item);
+end;
+
+
+procedure TArrayRecord<T>.Insert(Index: integer; Value: T);
+begin
+  TArray.Insert<T>(Items, Index, Value);
+end;
+
+
+
+procedure TArrayRecord<T>.InsertRange(Index: Integer; const ValuesToInsert: TArrayRecord<T>);
+begin
+  TArray.InsertRange<T>(Items, Index, ValuesToInsert.Items);
+end;
+
+procedure TArrayRecord<T>.InsertRange(Index: Integer; const ValuesToInsert: array of T);
+begin
+  TArray.InsertRange<T>(Items, Index, ValuesToInsert);
+end;
+
+
+
+function TArrayRecord<T>.Map(const Callback: TArrayMapCallback<T>): TArrayRecord<T>;
+begin
+  Result.Items := TArray.Map<T>(Items, Callback);
+end;
+
+
+
+function TArrayRecord<T>.Convert<TTo>(const Callback: TArrayConvert<T,TTo>): TArrayRecord<TTo>;
+var
+  I: Integer;
+begin
+  Result.Clear;
+  for I := Low(Items) to High(Items) do
+    Result.Add(Callback(Items[I]));
+end;
+
+
+
+procedure TArrayRecord<T>.Sort;
+begin
+  TArray.Sort<T>(Items);
+end;
+
+procedure TArrayRecord<T>.Sort(const AComparer: IComparer<T>);
+begin
+  TArray.Sort<T>(Items, AComparer);
+end;
+
+procedure TArrayRecord<T>.Sort(const AComparer: IComparer<T>; AIndex, ACount: Integer);
+begin
+  TArray.Sort<T>(Items, AComparer, AIndex, ACount);
+end;
+
+function TArrayRecord<T>.Add(const Value: T): integer;
+begin
+  Result := TArray.Add<T>(Items, Value);
+end;
+
+
+
 {$IFDEF TEST_FUNCTION}
+
+
+type
+  TTestRecord = record
+    Name: string;
+    Age: integer;
+    constructor Create(AName: string; AAge: integer);
+    class function NameComparer: IComparer<TTestRecord>; static;
+    class function AgeComparer: IComparer<TTestRecord>; static;
+    class function ConvertToNames(const Value: TTestRecord): string; static;
+    class function ConvertToAges(const Value: TTestRecord): integer; static;
+  end;
+
+constructor TTestRecord.Create(AName: string; AAge: integer);
+begin
+  Name := AName;
+  Age  := AAge;
+end;
+
+class function TTestRecord.ConvertToNames(const Value: TTestRecord): string;
+begin
+  Result := Value.Name;
+end;
+
+class function TTestRecord.ConvertToAges(const Value: TTestRecord): integer;
+begin
+  Result := Value.Age;
+end;
+
+class function TTestRecord.AgeComparer: IComparer<TTestRecord>;
+begin
+  Result := TComparer<TTestRecord>.Construct(
+    function(const Left, Right: TTestRecord): Integer
+    begin
+      Result := TComparer<integer>.Default.Compare(Left.Age, Right.Age);
+    end
+  );
+end;
+
+class function TTestRecord.NameComparer: IComparer<TTestRecord>;
+begin
+  Result := TComparer<TTestRecord>.Construct(
+    function(const Left, Right: TTestRecord): Integer
+    begin
+      Result := TComparer<string>.Default.Compare(Left.Name, Right.Name);
+    end
+  );
+end;
+
+
+procedure Test_TestRecord;
+var
+  List: TArrayRecord<TTestRecord>;
+  StrList: TArrayRecord<string>;
+  I: integer;
+begin
+  // create list
+  List.Clear;
+  List.Add( TTestRecord.Create('Jack', 26) );
+  List.Add( TTestRecord.Create('Anton', 28) );
+  List.Add( TTestRecord.Create('Barbie', 50) );
+  List.Add( TTestRecord.Create('Mickey Mouse', 90) );
+
+  // sort by name
+  List.Sort( TTestRecord.NameComparer );
+  // convert to string array
+
+  StrList := List.Convert<string>(TTestRecord.ConvertToNames);
+  assert( StrList.Compare(['Anton','Barbie','Jack','Mickey Mouse']) );
+
+  // convert to integer array
+  assert( List.Convert<integer>(TTestRecord.ConvertToAges).Compare([28,50,26,90]) );
+
+  // sort by age
+  List.Sort( TTestRecord.AgeComparer );
+  assert( List[0].Name = 'Jack' );
+
+  // IndexOf Min / Max
+  assert( List.IndexOfMax(TTestRecord.AgeComparer) = 3 );
+  assert( List.IndexOfMin(TTestRecord.AgeComparer) = 0 );
+
+  I := List.IndexOfMax(TTestRecord.NameComparer);
+  assert( List[I].Name = 'Mickey Mouse' );
+
+  I := List.IndexOfMin(TTestRecord.NameComparer);
+  assert( List[I].Name = 'Anton' );
+end;
+
+
+
 
 function CompareJokerFunction(const Value: string): boolean;
 begin
@@ -230,11 +737,163 @@ begin
 end;
 
 
-class procedure TArrayHelper.Test_All_Helper_Functions;
+procedure TestArrayContainer;
+const
+  CWeek: array[1..8] of string = ('Mon','Tues','Wednes','Bug','Thurs','Fri','Satur','Sun');
+var
+  AS1: TArrayRecord<string>;
+  AI,AI2: TArrayRecord<integer>;
+  I: Integer;
+begin
+  AI := TArrayRecord<integer>.Create(0);
+  assert(AI.Count = 0);
+  AS1 := TArrayRecord<string>.Create(10);
+  assert((AS1.Count = 10) and (AS1[1] = ''));
+
+  // Create
+  AI.Create([1,2,3]);
+  assert( AI.Compare([1,2,3]) );
+
+  // Add
+  AI.Clear;
+  assert( AI.Add(1) = 0 );
+  assert( AI.Add(2) = 1 );
+  assert( AI.Add(3) = 2 );
+
+  // IndexOf
+  assert( AI.IndexOf(1) = 0 );
+  assert( AI.IndexOf(2) = 1 );
+  assert( AI.IndexOf(5) = -1 );
+
+  // Contains
+  assert( AI.Contains(2) = TRUE );
+  assert( AI.Contains(5) = FALSE );
+  assert( AI.Contains(5, TComparer<integer>.Construct(
+    function(const Left, Right: integer): Integer
+    begin
+      Result := (Left + 4) - Right;
+    end
+  )) = TRUE );
+
+
+  // Delete
+  AI.Delete(1);
+  assert( AI.Contains(2) = FALSE );
+  assert( AI.Count = 2 );
+  try AI.Delete(2); assert(TRUE); except end;  // exception expected
+  AI.Delete(0);  assert( AI.Count = 1 );
+  AI.Delete(0);  assert( AI.Count = 0 );
+  try AI.Delete(0); assert(TRUE); except end;  // exception expected
+
+  // Insert
+  AS1.Clear;
+  AS1.Insert(0, 'one');
+  AS1.Insert(0, 'two');
+  assert( AS1.Count = 2 );
+  assert( AS1[0] = 'two' );
+  assert( AS1[1] = 'one' );
+
+  AS1.Insert(2, 'three');
+  assert( (AS1.Count = 3) and (AS1[2] = 'three') );
+
+  // AddRange
+  AI.Clear;
+  AI.AddRange( TArray<integer>.Create(4,5,6) );
+  assert( (AI.Count = 3) and (AI[2] = 6) );
+  AI.AddRange( TArray<integer>.Create(10,11,12) );
+  assert( (AI.Count = 6) and (AI[5] = 12) and (AI[0] = 4) );
+
+  // Compare
+  AI.Create([1,2,3]);
+  AI2 := AI;
+  Assert( AI.Compare([1,2,3]) );
+  Assert( AI.Compare(AI.Items) );
+  Assert( AI.Compare(AI2) );
+  AI2.Add(4);
+  Assert( not AI.Compare(AI2) );
+
+  // Equal
+  AI.Create([1,2,3,4,5,6]);
+  AI2 := AI;
+  assert( AI = AI2 );
+  AI.AddRange( AI2 );
+  assert( (AI.Count = 12) and (AI <> AI2) );
+  AI2.InsertRange( AI2.Count, AI2 );
+  assert( (AI.Count = AI2.Count) and (AI = AI2) );
+
+  // InsertRange
+  AI.Clear;
+  AI.InsertRange( 0, TArray<integer>.Create(4,5,6) );
+  assert( (AI.Count = 3) and (AI[2] = 6) );
+  AI.InsertRange( 0, [10,11,12]);
+  assert( (AI.Count = 6) and (AI[5] = 6) and (AI[0] = 10) );
+  AI.InsertRange( 3,[21,22]);
+  assert( (AI.Count = 8) and (AI[7] = 6) and (AI[0] = 10) and (AI[3] = 21) );
+
+
+  // ForEach
+  AI.Items := TArray<integer>.Create(5,4,3,2,1);
+  AS1.Clear;
+  AI.ForEach(
+    procedure(var Value: integer; Index: integer)
+    begin
+      Value := Value * 10;
+      AS1.Add(IntToStr(Value));
+    end
+  );
+  // sort
+  AI.Sort;
+  AS1.Sort;
+  assert( AI.Compare([10,20,30,40,50]) );
+  assert( AS1.Compare(['10','20','30','40','50']) );
+
+
+  // Find
+  AI.Clear;
+  AS1.SetItems(['4','king','joker','7','JOKER','joker','ace','joker']);
+  I := -1;
+  repeat
+    I := AS1.Find(CompareJokerFunction, I+1);
+    if I >= 0 then AI.Add( I);
+  until I < 0;
+  assert( AI.Compare([2,4,5,7]) );
+
+
+  // Map
+  AI.Clear;
+  for I := 1 to 50 do AI.Add( I);
+  AI := AI.Map(
+    function(var Value: integer; Index: integer): boolean
+    begin
+      Result := (Value >= 10) and (Value < 20);
+      if Result then
+        Value := Value + 100;
+    end
+  );
+  assert( AI.Count = 10 );
+  assert( AI[1] = 111 );
+
+  // Map <string>
+  AS1.SetItems(CWeek);
+  AS1 := AS1.Map(
+    function(var Value: string; Index: integer): boolean
+    begin
+      Result := Value <> 'Bug';
+      Value := Value + 'day';
+    end
+  );
+  assert( AS1.Contains('Monday') );
+  assert( AS1.Contains('Sunday') );
+  assert( not AS1.Contains('Bugday') );
+end;
+
+
+
+procedure TestArrayHelper;
 var
   AI: TArray<integer>;
   AStr: TArray<string>;
-  I,N: Integer;
+  I: Integer;
 begin
   // Add
   AI := NIL;
@@ -294,6 +953,23 @@ begin
   TArray.InsertRange<integer>(AI, 3, TArray<integer>.Create(21,22));
   assert( (length(AI) = 8) and (AI[7] = 6) and (AI[0] = 10) and (AI[3] = 21) );
 
+
+  // ForEach
+  AI := TArray<integer>.Create(5,4,3,2,1);
+  AStr := NIL;
+  TArray.ForEach<integer>( AI,
+    procedure(var Value: integer; Index: integer)
+    begin
+      Value := Value * 10;
+      TArray.Add<string>(AStr, IntToStr(Value));
+    end
+  );
+  TArray.Sort<integer>(AI);
+  TArray.Sort<string>(AStr);
+  assert( TArray.Compare<integer>(AI, TArray<integer>.Create(10,20,30,40,50)) );
+  assert( TArray.Compare<string>(AStr, TArray<string>.Create('10','20','30','40','50')) );
+
+
   // Find
   AI := NIL;
   AStr := TArray<string>.Create('4','king','joker','7','JOKER','joker','ace','joker');
@@ -331,6 +1007,13 @@ begin
   assert( TArray.Contains<string>(AStr, 'Monday') );
   assert( TArray.Contains<string>(AStr, 'Sunday') );
 
+end;
+
+class procedure TArrayHelper.Test_All_Helper_Functions;
+begin
+  TestArrayHelper;
+  TestArrayContainer;
+  Test_TestRecord;
 end;
 
 {$ENDIF TEST_FUNCTION}
