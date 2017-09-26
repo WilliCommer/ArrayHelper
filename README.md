@@ -2,8 +2,8 @@
 
 Delphi class helper for TArray. Class functions Add, Delete, IndexOf, Map and more, including examples and test.
 
-Dynamic arrays are smart because its memore usage is handled by the memory
-manager. But the funtion libraries are lean and differs from object based.
+Dynamic arrays are smart because its memory usage is handled by the memory
+manager. But the function libraries are lean and differs from object based.
 Based on TArray class, that gives Sort and Binary search, this unit will
 extend TArray with functions available for TList or TStrings.
 
