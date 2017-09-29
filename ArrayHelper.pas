@@ -3,7 +3,7 @@ unit ArrayHelper;
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-//  ArrayHelper  version 1.2
+//  ArrayHelper  version 1.3
 //  extends class TArray and add TArrayRecord<T> to make dynamic arrays
 //  as simple, as TList
 //
@@ -20,28 +20,40 @@ unit ArrayHelper;
 //
 //  var
 //    A: TArrayRecord<string>;
+//    S: string;
 //  begin
 //    A.SetValues(['a','b','c']);
 //    A.Add('d');
 //    assert(  A.Count = 4 );    // same as length(A.Items);
 //    assert(  A[1] = 'b' );
 //    assert(  A.IndexOf('a') = 0 );
-//    ..
+//    for S in A do
+//      ..
 //
 //  For more examples see procedure Test_All_Helper_Functions
 //  For updates check https://github.com/WilliCommer/ArrayHelper
 //
 //
+//  History:
+//  version 1.3
+//    Enumeration added
+//    new functions 'Unique' and 'CopyArray'
+//
+//  version 1.2
+//    TArrayRecord<T>
+//
 ///////////////////////////////////////////////////////////////////////////////
 
 
 
-{$DEFINE TEST_FUNCTION}  // change to deactive test function
+{  $DEFINE TEST_FUNCTION}  // change to active test function
 
 
 interface
 uses
-  System.Classes, System.SysUtils, System.RTLConsts, System.Generics.Defaults, System.Generics.Collections;
+  System.Classes, System.SysUtils, System.RTLConsts,
+  System.Generics.Defaults, System.Generics.Collections;
+
 
 type
 
@@ -126,6 +138,19 @@ type
 
 type
   TArrayRecord<T> = record
+  strict private type
+    TEnumerator = class
+    private
+      FValue: ^TArrayRecord<T>;
+      FIndex: integer;
+      function GetCurrent: T;
+    public
+      constructor Create(var AValue: TArrayRecord<T>);
+      function MoveNext: Boolean;
+      property Current: T read GetCurrent;
+    end;
+  public
+    function GetEnumerator(): TEnumerator;
   private
     function GetCount: integer;
     procedure SetCount(const Value: integer);
@@ -180,6 +205,9 @@ type
       AIndex, ACount: Integer): Boolean; overload;
     function BinarySearch(const AItem: T; out AFoundIndex: Integer; const AComparer: IComparer<T>): Boolean; overload;
     function BinarySearch(const AItem: T; out AFoundIndex: Integer): Boolean; overload;
+
+    procedure Unique; // remove duplicates
+    function CopyArray(FromIndex: integer; Count: integer = -1): TArrayRecord<T>;  // return array slice
 
     // operator overloads
     class operator Equal(const L, R: TArrayRecord<T>): boolean;
@@ -338,6 +366,7 @@ end;
 
 
 
+
 class procedure TArrayHelper.ForEach<T>(var Values: TArray<T>; const Callback: TArrayForEachCallback<T>);
 var
   I: Integer;
@@ -378,6 +407,25 @@ end;
 
 
 
+{ TArrayRecord<T>.TEnumerator }
+
+constructor TArrayRecord<T>.TEnumerator.Create(var AValue: TArrayRecord<T>);
+begin
+  FValue := @AValue;
+  FIndex := -1;
+end;
+
+function TArrayRecord<T>.TEnumerator.GetCurrent: T;
+begin
+  Result := FValue^.Items[FIndex];
+end;
+
+function TArrayRecord<T>.TEnumerator.MoveNext: Boolean;
+begin
+  Result := FIndex < High(FValue^.Items);
+  Inc(FIndex);
+end;
+
 
 
 { TArrayRecord<T> }
@@ -406,6 +454,7 @@ begin
   Result := L.Compare(R);
 end;
 
+
 class operator TArrayRecord<T>.NotEqual(const L, R: TArrayRecord<T>): boolean;
 begin
   Result := not L.Compare(R);
@@ -416,6 +465,11 @@ end;
 function TArrayRecord<T>.GetCount: integer;
 begin
   Result := length(Items);
+end;
+
+function TArrayRecord<T>.GetEnumerator: TEnumerator;
+begin
+  Result := TEnumerator.Create(Self);
 end;
 
 procedure TArrayRecord<T>.SetCount(const Value: integer);
@@ -473,6 +527,7 @@ procedure TArrayRecord<T>.Delete(Index: integer);
 begin
   TArray.Delete<T>(Items, Index);
 end;
+
 
 
 function TArrayRecord<T>.Remove(const AItem: T): boolean;
@@ -617,6 +672,25 @@ end;
 
 
 
+function TArrayRecord<T>.CopyArray(FromIndex: integer; Count: integer): TArrayRecord<T>;
+var
+  I: Integer;
+begin
+  Result.Clear;
+  if Count < 0 then
+    Count := length(Items);
+  if length(Items) < (FromIndex + Count) then
+    Count := length(Items) - FromIndex;
+  if Count > 0 then
+  begin
+    SetLength(Result.Items, Count);
+    for I := 0 to Count-1 do
+      Result.Items[I] := Items[I + FromIndex];
+  end;
+end;
+
+
+
 procedure TArrayRecord<T>.Sort;
 begin
   TArray.Sort<T>(Items);
@@ -635,6 +709,21 @@ end;
 function TArrayRecord<T>.Add(const Value: T): integer;
 begin
   Result := TArray.Add<T>(Items, Value);
+end;
+
+procedure TArrayRecord<T>.Unique;
+var
+  Hash: TDictionary<T,integer>;
+  I: Integer;
+begin
+  Hash := TDictionary<T,integer>.Create(length(Items));
+  try
+    for I := Low(Items) to High(Items) do
+      Hash.AddOrSetValue(Items[I], 0);
+    Items := Hash.Keys.ToArray;
+  finally
+    Hash.Free;
+  end;
 end;
 
 
@@ -726,6 +815,16 @@ begin
 
   I := List.IndexOfMin(TTestRecord.NameComparer);
   assert( List[I].Name = 'Anton' );
+
+  // Unique
+  List.Add(List[0]);
+  List.Insert(2, List[1]);
+  List.Insert(4, List[1]);
+  List.Unique;
+  List.Sort(TTestRecord.NameComparer);
+  StrList := List.Convert<string>(TTestRecord.ConvertToNames);
+  assert( StrList.Compare(['Anton','Barbie','Jack','Mickey Mouse']) );
+
 end;
 
 
@@ -741,14 +840,15 @@ procedure TestArrayContainer;
 const
   CWeek: array[1..8] of string = ('Mon','Tues','Wednes','Bug','Thurs','Fri','Satur','Sun');
 var
-  AS1: TArrayRecord<string>;
+  AStr: TArrayRecord<string>;
   AI,AI2: TArrayRecord<integer>;
   I: Integer;
+  S: string;
 begin
   AI := TArrayRecord<integer>.Create(0);
   assert(AI.Count = 0);
-  AS1 := TArrayRecord<string>.Create(10);
-  assert((AS1.Count = 10) and (AS1[1] = ''));
+  AStr := TArrayRecord<string>.Create(10);
+  assert((AStr.Count = 10) and (AStr[1] = ''));
 
   // Create
   AI.Create([1,2,3]);
@@ -786,15 +886,15 @@ begin
   try AI.Delete(0); assert(TRUE); except end;  // exception expected
 
   // Insert
-  AS1.Clear;
-  AS1.Insert(0, 'one');
-  AS1.Insert(0, 'two');
-  assert( AS1.Count = 2 );
-  assert( AS1[0] = 'two' );
-  assert( AS1[1] = 'one' );
+  AStr.Clear;
+  AStr.Insert(0, 'one');
+  AStr.Insert(0, 'two');
+  assert( AStr.Count = 2 );
+  assert( AStr[0] = 'two' );
+  assert( AStr[1] = 'one' );
 
-  AS1.Insert(2, 'three');
-  assert( (AS1.Count = 3) and (AS1[2] = 'three') );
+  AStr.Insert(2, 'three');
+  assert( (AStr.Count = 3) and (AStr[2] = 'three') );
 
   // AddRange
   AI.Clear;
@@ -833,27 +933,27 @@ begin
 
   // ForEach
   AI.Items := TArray<integer>.Create(5,4,3,2,1);
-  AS1.Clear;
+  AStr.Clear;
   AI.ForEach(
     procedure(var Value: integer; Index: integer)
     begin
       Value := Value * 10;
-      AS1.Add(IntToStr(Value));
+      AStr.Add(IntToStr(Value));
     end
   );
   // sort
   AI.Sort;
-  AS1.Sort;
+  AStr.Sort;
   assert( AI.Compare([10,20,30,40,50]) );
-  assert( AS1.Compare(['10','20','30','40','50']) );
+  assert( AStr.Compare(['10','20','30','40','50']) );
 
 
   // Find
   AI.Clear;
-  AS1.SetItems(['4','king','joker','7','JOKER','joker','ace','joker']);
+  AStr.SetItems(['4','king','joker','7','JOKER','joker','ace','joker']);
   I := -1;
   repeat
-    I := AS1.Find(CompareJokerFunction, I+1);
+    I := AStr.Find(CompareJokerFunction, I+1);
     if I >= 0 then AI.Add( I);
   until I < 0;
   assert( AI.Compare([2,4,5,7]) );
@@ -874,17 +974,42 @@ begin
   assert( AI[1] = 111 );
 
   // Map <string>
-  AS1.SetItems(CWeek);
-  AS1 := AS1.Map(
+  AStr.SetItems(CWeek);
+  AStr := AStr.Map(
     function(var Value: string; Index: integer): boolean
     begin
       Result := Value <> 'Bug';
       Value := Value + 'day';
     end
   );
-  assert( AS1.Contains('Monday') );
-  assert( AS1.Contains('Sunday') );
-  assert( not AS1.Contains('Bugday') );
+  assert( AStr.Contains('Monday') );
+  assert( AStr.Contains('Sunday') );
+  assert( not AStr.Contains('Bugday') );
+
+  // enumerate
+  AI.Clear;
+  AStr.SetItems(CWeek);
+  for S in AStr do
+    AI.Add(length(S));
+  assert( AI.Count = AStr.Count );
+  assert( AI.Compare([3,4,6,3,5,3,5,3]) );
+  // check empty enumeration
+  AStr.Clear;
+  for S in AStr do
+    AI.Add(length(S));
+  assert( AI.Compare([3,4,6,3,5,3,5,3]) );
+
+  // Unique
+  AI.Unique;
+  AI.Sort;
+  assert( AI.Compare([3,4,5,6]) );
+
+  // CopyArray
+  assert( AI.CopyArray(2).Compare([5,6]) );
+  assert( AI.CopyArray(0,2).Compare([3,4]) );
+  assert( AI.CopyArray(1,2).Compare([4,5]) );
+
+
 end;
 
 
@@ -1017,6 +1142,7 @@ begin
 end;
 
 {$ENDIF TEST_FUNCTION}
+
 
 
 end.

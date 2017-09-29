@@ -38,4 +38,5 @@ use TArrayRecord like this
 	  assert(  A.Count = 4 );    // same as length(A.Items);
 	  assert(  A[1] = 'b' );
 	  assert(  A.IndexOf('a') = 0 );
-      ..
+	  for S in A do
+        ..
