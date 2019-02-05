@@ -127,6 +127,8 @@ type
     // return an array filtered and converted by callback function
     class function Map<T>(const Values: TArray<T>; const Callback: TArrayMapCallback<T>): TArray<T>; static;
 
+    // return the array as TList
+    class procedure List<T>(const Values: TArray<T>; var ValList: TList<T>); static;
 
 {$IFDEF TEST_FUNCTION}
     // test, debug and example function
@@ -209,6 +211,7 @@ type
     procedure Unique; // remove duplicates
     function CopyArray(FromIndex: integer; Count: integer = -1): TArrayRecord<T>;  // return array slice
 
+    procedure List(var ValList: TList<T>);
     // operator overloads
     class operator Equal(const L, R: TArrayRecord<T>): boolean;
     class operator NotEqual(const L, R: TArrayRecord<T>): boolean;
@@ -271,6 +274,18 @@ begin
     Values[Index+I] := ValuesToInsert[I];
 end;
 
+
+class procedure TArrayHelper.List<T>(const Values: TArray<T>; var ValList:
+    TList<T>);
+var
+  I: Integer;
+begin
+  if not Assigned(ValList) then
+    raise Exception.Create('ValList is nil');
+  ValList.Clear;
+  for I := Low(Values) to High(Values) do
+    ValList.Add(Values[I]);
+end;
 
 class procedure TArrayHelper.AddRange<T>(var Values: TArray<T>; const ValuesToInsert: array of T);
 var
@@ -645,6 +660,11 @@ end;
 procedure TArrayRecord<T>.InsertRange(Index: Integer; const ValuesToInsert: TArrayRecord<T>);
 begin
   TArray.InsertRange<T>(Items, Index, ValuesToInsert.Items);
+end;
+
+procedure TArrayRecord<T>.List(var ValList: TList<T>);
+begin
+  TArray.List<T>(Items, ValList);
 end;
 
 procedure TArrayRecord<T>.InsertRange(Index: Integer; const ValuesToInsert: array of T);
