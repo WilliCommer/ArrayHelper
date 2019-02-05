@@ -169,7 +169,7 @@ type
     procedure Delete(Index: integer);
     procedure Insert(Index: integer; Value: T);
     function Remove(const AItem: T): boolean;
-    function AddIfNotContians(const AItem: T): boolean;
+    function AddIfNotContains(const AItem: T): boolean;
 
     procedure AddRange(const ValuesToInsert: array of T); overload;
     procedure AddRange(const ValuesToInsert: TArrayRecord<T>); overload;
@@ -545,7 +545,7 @@ begin
 end;
 
 
-function TArrayRecord<T>.AddIfNotContians(const AItem: T): boolean;
+function TArrayRecord<T>.AddIfNotContains(const AItem: T): boolean;
 begin
   Result := not Contains(AItem);
   if not Result then
