@@ -562,7 +562,7 @@ end;
 
 function TArrayRecord<T>.AddIfNotContains(const AItem: T): boolean;
 begin
-  Result := not Contains(AItem);
+  Result := Contains(AItem);
   if not Result then
     Add(AItem);
 end;
