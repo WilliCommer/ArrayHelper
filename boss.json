@@ -1,0 +1,9 @@
+{
+	"name": "ArrayHelper",
+	"description": "",
+	"version": "1.3",
+	"homepage": "https://github.com/WilliCommer/ArrayHelper",
+	"mainsrc": "Delphi class helper for TArray. Class functions Add, Delete, IndexOf, Map and more, including examples and test.",
+	"projects": [],
+	"dependencies": {}
+}
